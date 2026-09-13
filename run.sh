@@ -83,61 +83,36 @@ fi
 
 echo "[INFO] Aggregation complete: $(wc -l < "$OUTPUT_DIR/aggregated.txt") unique networks/IPs"
 
-# Check for multi-country configuration (NEW FORMAT) or legacy single country
-COUNTRY_VARS_FOUND=false
+# ---------------------------------------------------------------------------
+# GeoIP exclusion filtering
+# ---------------------------------------------------------------------------
 
-# Check for numbered country variables (COUNTRY_ISO_CODE_1, COUNTRY_ISO_CODE_2, etc.)
-for var in $(env | grep '^COUNTRY_ISO_CODE_[0-9]' | cut -d= -f1); do
-  if [ -n "${!var}" ]; then
-    COUNTRY_VARS_FOUND=true
-    break
-  fi
-done
+echo "[INFO] Running GeoIP country exclusion filtering..."
 
-# Check for legacy single country variable if no numbered ones found
-if [ "$COUNTRY_VARS_FOUND" = false ] && [ -n "$COUNTRY_ISO_CODE" ]; then
-  COUNTRY_VARS_FOUND=true
+if ! python /app/filter_ips.py; then
+    echo "[ERROR] GeoIP filtering failed!"
+    exit 1
 fi
 
-# Run country filtering if any country configuration is found
-if [ "$COUNTRY_VARS_FOUND" = true ]; then
-  echo "[INFO] Country configuration detected, running multi-country filtering..."
-  if ! python /app/filter_ips.py; then
-    echo "[WARNING] Country filtering failed, but continuing..."
-  fi
-else
-  echo "[INFO] No country filtering configuration found - skipping geographic filtering"
-  echo "[INFO] To enable country filtering, set COUNTRY_ISO_CODE_1, COUNTRY_NAME_1, etc. in .env"
-fi
+# ---------------------------------------------------------------------------
+# Cleanup
+# ---------------------------------------------------------------------------
 
-# Clean up downloaded input files and temporary files
 echo "[INFO] Cleaning up temporary files..."
+
 rm -rf "$INPUT_DIR"
 rm -f "$COMBINED_INPUT"
 
 echo "[INFO] Processing complete!"
-echo "[INFO] Results saved to $OUTPUT_DIR/"
 
-# Show final results
+echo "[INFO] Results:"
+
 if [ -f "$OUTPUT_DIR/aggregated.txt" ]; then
-  echo "[INFO] Aggregated IPs: $(wc -l < "$OUTPUT_DIR/aggregated.txt")"
+    echo "[INFO] Original aggregated list:"
+    echo "       $(wc -l < "$OUTPUT_DIR/aggregated.txt") entries"
 fi
 
-# Show country-specific results if they exist
-echo "[INFO] Checking for country-specific output files..."
-for country_file in "$OUTPUT_DIR"/aggregated-*-only.txt; do
-  if [ -f "$country_file" ]; then
-    filename=$(basename "$country_file")
-    count=$(wc -l < "$country_file")
-    echo "[INFO] $filename: $count IPs"
-  fi
-done
-
-# Show combined multi-country files if they exist
-for combined_file in "$OUTPUT_DIR"/aggregated-*-combined.txt; do
-  if [ -f "$combined_file" ]; then
-    filename=$(basename "$combined_file")
-    count=$(wc -l < "$combined_file")
-    echo "[INFO] Combined file $filename: $count IPs"
-  fi
-done
+if [ -f "$OUTPUT_DIR/aggregated-vyos.txt" ]; then
+    echo "[INFO] VyOS filtered list:"
+    echo "       $(wc -l < "$OUTPUT_DIR/aggregated-vyos.txt") entries"
+fi

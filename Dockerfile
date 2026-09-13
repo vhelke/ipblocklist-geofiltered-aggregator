@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y bash curl wget && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install required Python libraries for the application
-RUN pip install --no-cache-dir pandas requests ipaddress python-dotenv pysubnettree
+RUN pip install --no-cache-dir netaddr pandas requests ipaddress python-dotenv pysubnettree
 
 # Set the working directory in the container
 WORKDIR /app
