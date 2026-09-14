@@ -80,6 +80,7 @@ EXCLUDE_COUNTRIES = {
     if x.strip()
 }
 
+IPV6_MIN_PREFIX = int(os.getenv("IPV6_MIN_PREFIX", "64"))
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -145,6 +146,26 @@ def download_file(url, destination):
         destination,
         total_bytes / 1024 / 1024
     )
+
+# ---------------------------------------------------------------------------
+# Promote IPv6
+# ---------------------------------------------------------------------------
+
+def promote_ipv6(networks, min_prefix):
+    """Promote any IPv6 network smaller (more specific) than
+    min_prefix up to a single block of that size -- a lone /128
+    from an abuse report represents one host, but the attacker
+    likely controls the whole containing /64 and can trivially
+    rotate within it, so blocking just the /128 offers little
+    protection."""
+
+    promoted = []
+    for net in networks:
+        if net.prefixlen > min_prefix:
+            promoted.append(net.supernet(new_prefix=min_prefix))
+        else:
+            promoted.append(net)
+    return promoted
 
 
 # ---------------------------------------------------------------------------
@@ -833,10 +854,8 @@ def main():
         4
     )
 
-    ipv6_collapsed = collapse_networks(
-        ipv6_networks,
-        6
-    )
+    ipv6_networks = promote_ipv6(ipv6_networks, IPV6_MIN_PREFIX)
+    ipv6_collapsed = collapse_networks(ipv6_networks, 6)
 
     # ---------------------------------------------------------------
     # Write
