@@ -1,7 +1,7 @@
 name: Generate Multi-Country Blocklists
 
 #-------------------------------------------------------------------#
-##  ##  ##          DONT FORGET TO CHANGE:                 ##  ##  ## 
+##  ##  ##          DONT FORGET TO CHANGE:                 ##  ##  ##
 ##  ##  ##    settings > actions > workflow permissions    ##  ##  ##
 ##  ##  ##    Set to "Read and write permissions"          ##  ##  ##
 #-------------------------------------------------------------------#
@@ -11,23 +11,11 @@ permissions:
   actions: read
 
 on:
-  # Scheduled runs - daily at 2:17 AM and 2:17 PM UTC (using prime number)
+  # Scheduled runs - every 8 hours at 17 minutes past the hour
   schedule:
-     #        ┌───────────── minute (0 - 59)
-     #        │ ┌───────────── hour (0 - 23)
-     #        │ │ ┌───────────── day of month (1 - 31)
-     #        │ │ │ ┌───────────── month (1 - 12 or JAN-DEC)
-     #        │ │ │ │ ┌───────────── day of week (0 - 6) (SUN-SAT, 0 = SUN)
-     #        │ │ │ │ │
-     #        * * * * *
     - cron: "17 */8 * * *"
-     # Scheduled run above - daily at 2:17 AM and 2:17 PM (using prime number for odd min time)
-     #  cron: "37 13 * * 6"
-     # Example run above - Saturday at 13:37 UTC (7:37am MDT, once a week, on Sunday)
-     #  cron: "7 6 */2 * *"
-     # Example run above - Every other day at 6:07am UTC (days of the month divisible by 2, even days)
 
-  # Trigger on .env file changes
+  # Trigger when configuration or processing files change
   push:
     paths:
       - '.env'
@@ -37,7 +25,7 @@ on:
       - 'run.sh'
       - '.github/workflows/ip-aggregation.yml'
     branches: [ "main", "master" ]
-  
+
   # Allow manual triggering
   workflow_dispatch:
     inputs:
@@ -63,10 +51,10 @@ jobs:
       - name: Set up environment
         run: |
           mkdir -p data/input data/output data/geoip
-          
+
           echo "=== Repository Structure ==="
           ls -la
-          
+
           echo "=== Environment File ==="
           cat .env
 
@@ -81,27 +69,67 @@ jobs:
           docker compose up --build
           echo "=== Process Complete ==="
 
-      - name: Verify VyOS blacklist
+      - name: Verify VyOS blacklists
         run: |
-          echo "=== VyOS Blacklist ==="
+          echo "=== VyOS Blacklists ==="
+
+          # ---------------------------------------------------------
+          # IPv4
+          # ---------------------------------------------------------
 
           if [ ! -f "data/output/aggregated-vyos.txt" ]; then
             echo "❌ aggregated-vyos.txt was not generated!"
             exit 1
           fi
 
-          COUNT=$(wc -l < data/output/aggregated-vyos.txt)
-
-          echo "✅ VyOS blacklist generated"
-          echo "Entries: $COUNT"
+          IPV4_COUNT=$(wc -l < data/output/aggregated-vyos.txt)
 
           echo ""
-          echo "First 20 entries:"
+          echo "✅ IPv4 blacklist generated"
+          echo "Entries: $IPV4_COUNT"
+
+          echo ""
+          echo "First 20 IPv4 entries:"
           head -20 data/output/aggregated-vyos.txt
 
           echo ""
-          echo "File size:"
+          echo "IPv4 file size:"
           du -h data/output/aggregated-vyos.txt
+
+          # ---------------------------------------------------------
+          # IPv6
+          # ---------------------------------------------------------
+
+          if [ ! -f "data/output/aggregated-vyos-ipv6.txt" ]; then
+            echo "❌ aggregated-vyos-ipv6.txt was not generated!"
+            exit 1
+          fi
+
+          IPV6_COUNT=$(wc -l < data/output/aggregated-vyos-ipv6.txt)
+
+          echo ""
+          echo "✅ IPv6 blacklist generated"
+          echo "Entries: $IPV6_COUNT"
+
+          echo ""
+          echo "First 20 IPv6 entries:"
+          head -20 data/output/aggregated-vyos-ipv6.txt
+
+          echo ""
+          echo "IPv6 file size:"
+          du -h data/output/aggregated-vyos-ipv6.txt
+
+          # ---------------------------------------------------------
+          # Summary
+          # ---------------------------------------------------------
+
+          echo ""
+          echo "========================================"
+          echo "Blacklist generation successful"
+          echo "========================================"
+          echo "IPv4 entries: $IPV4_COUNT"
+          echo "IPv6 entries: $IPV6_COUNT"
+          echo "========================================"
 
       - name: Commit and push changes
         run: |
@@ -109,15 +137,17 @@ jobs:
 
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
-          
+
           git add data/output/
-          
+
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            TOTAL_COUNT=$(wc -l < data/output/aggregated-vyos.txt)
+            IPV4_COUNT=$(wc -l < data/output/aggregated-vyos.txt)
+            IPV6_COUNT=$(wc -l < data/output/aggregated-vyos-ipv6.txt)
 
-            git commit -m "🤖 Automated IP blocklist update - $TOTAL_COUNT entries"
+            git commit -m "🤖 Automated IP blocklist update - IPv4: $IPV4_COUNT, IPv6: $IPV6_COUNT"
+
             git push
 
             echo "✅ Changes committed and pushed successfully"
